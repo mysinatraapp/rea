@@ -1,0 +1,75 @@
+#Script for rea-cruitment
+#Simple-sinatra-app
+#It creates Security Group, deploy an EC2 instance and 
+#configure user-data to deploy necessary packages and install application
+
+
+#Create Security Group
+Description: Create an EC2 instance by AWS CloudFormation for Sinatra application
+Resources:
+  SecurityGroupSinatraWeb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SinatraWebSG
+      SecurityGroupIngress:
+      #Security group rule to allow incomming traffic on port 80
+      #This is required for Sinatra app
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+        Description: Allowing traffic from Internet
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        #*********Please replace this IP address with your public IP for SSH access********
+        CidrIp: 220.220.220.60/32
+        Description: Allowing public IP of management network for SSH access
+      GroupDescription: Security Group for Sinatra server
+      #***********Please replace this VPC ID with your VPC ID***********
+      VpcId: "vpc-003fcf77596a88d90"
+  EC2InstanceDemoSvr:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init: 
+        config: 
+          packages: 
+            yum:
+              git: []
+    Properties:
+      #********Please replace this availability zone with your availability zone**********
+      AvailabilityZone: "us-east-1a"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          DeleteOnTermination: 'true'
+          VolumeSize: '8'
+          VolumeType: gp2
+      #Standard AMI for Ubuntu provided by AWS     
+      ImageId: "ami-07ebfd5b3428b6f4d"
+      InstanceType: "t2.micro"
+      #*******Please replace the key pair name with your key pair name***********
+      KeyName: "us.demo.keypair"
+      NetworkInterfaces:
+      - Description: Primary network interface
+        DeviceIndex: "0"
+        #********Please replace teh subnet ID with your subnet ID**********
+        SubnetId: "subnet-0157638b267390853"
+        PrivateIpAddress: "172.61.20.6"
+        GroupSet:
+        - Ref: SecurityGroupSinatraWeb
+      #User Data to clone GIT repository, configure the required package
+      #and have the application running in the background
+      UserData:
+        Fn::Base64:
+          !Join [ "", [
+            "#!/bin/bash -xe\n",
+            "sudo apt update\n",
+            "sudo apt install ruby-bundler -y\n",
+            "cd /home/ubuntu \n",
+            "HOME=/root\n",
+            "git clone https://github.com/rea-cruitment/simple-sinatra-app.git \n",
+            "cd simple-sinatra-app\n",
+            "bundle install\n",
+            "nohup sudo ruby helloworld.rb -p 80 -e production &\n",
+            "\n" ] ]
